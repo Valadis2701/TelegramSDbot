@@ -19,6 +19,9 @@ def handle_message(message):
     chat_id = message.chat.id
     text = read_prompt() + message.text
 
+    response_msg = bot.send_message(chat_id, text="In progress...")
+    message_id = response_msg.message_id
+
     response = requests.post(api_endpoint, json={
         "prompt": text,
         "negative_prompt": read_negative_prompt(),
@@ -29,6 +32,8 @@ def handle_message(message):
         "height": 512,
         "sampler_name": "Euler a"
     })
+
+    bot.delete_message(chat_id, message_id)
 
     if response.status_code == 200:
         images_base64 = response.json().get("images")
@@ -43,8 +48,7 @@ def handle_message(message):
             if image_path:
                 # Отправляем изображение и кнопку пользователю
                 with open(image_path, "rb") as file:
-                    bot.send_photo(chat_id, photo=file)
-                    bot.send_message(chat_id, "Нажмите кнопку, чтобы сохранить картинку", reply_markup=create_inline_keyboard(image_path))
+                    bot.send_photo(chat_id, photo=file, reply_markup=create_inline_keyboard(image_path))
             else:
                 bot.send_message(chat_id, text="Failed to save the image")
         else:
@@ -58,6 +62,16 @@ def handle_callback(call):
     message_id = call.message.message_id
     image_path = call.data
 
+    if image_path == "cancel":
+        try:
+            bot.send_message(chat_id, text="Removed...")
+            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            bot.delete_message(chat_id, message_id)
+            return 
+        except Exception:
+            print("Нам ПиЗдА!!")
+            return None
+    
     # Перемещаем изображение из папки "all" в папку "pictures"
     copy_image_path = copy_image(image_path, pictures_folder_path)
 
@@ -130,8 +144,10 @@ def read_negative_prompt():
 
 def create_inline_keyboard(image_path):
     keyboard = telebot.types.InlineKeyboardMarkup()
-    callback_button = telebot.types.InlineKeyboardButton(text="🔥", callback_data=image_path)
-    keyboard.add(callback_button)
+    approve_button = telebot.types.InlineKeyboardButton(text="🔥", callback_data=image_path)
+    cancel_button = telebot.types.InlineKeyboardButton(text="❌", callback_data="cancel")
+    keyboard.add(approve_button)
+    keyboard.add(cancel_button)
     return keyboard
 
 bot.polling()
