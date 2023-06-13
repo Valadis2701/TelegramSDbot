@@ -3,6 +3,9 @@ import base64
 import telebot
 import os
 import shutil
+import datetime
+
+print("Started")
 
 bot_token = "5281939613:AAGHxPMQCzWQHs2A9DULc0jQMqkFCT5vv_U"
 api_endpoint = "http://127.0.0.1:7861/sdapi/v1/txt2img"
@@ -43,7 +46,11 @@ def handle_message(message):
             image_data = base64.b64decode(image_base64)
 
             # Сохраняем изображение в папке "all"
-            image_path = save_image(image_data, all_images_folder_path)
+            current_datetime = datetime.datetime.now()
+            formatted_datetime = current_datetime.strftime("%d/%m/%Y_%H:%M:%S")
+            iname = str(chat_id) + ":" + formatted_datetime + ".jpg"
+            print(iname)
+            image_path = save_image(iname.replace(":","-"), image_data, all_images_folder_path)
 
             if image_path:
                 # Отправляем изображение и кнопку пользователю
@@ -76,21 +83,18 @@ def handle_callback(call):
     copy_image_path = copy_image(image_path, pictures_folder_path)
 
     if copy_image_path:
-        # Обновляем индексацию
-        update_index_file(chat_id, copy_image_path)
 
         bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
         bot.send_message(chat_id, text="Картинка сохранена успешно")
     else:
         bot.send_message(chat_id, text="Failed to move the image")
 
-def save_image(image_data, folder_path):
+def save_image(image_name, image_data, folder_path):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-    image_index = get_next_image_index(folder_path)
-    image_filename = f"{image_index}.jpg"
-    image_path = os.path.join(folder_path, image_filename)
+ 
+    image_path = os.path.join(folder_path, image_name)
 
     try:
         with open(image_path, "wb") as file:
@@ -119,12 +123,6 @@ def get_next_image_index(folder_path):
             return last_index + 1
 
     return 0
-
-def update_index_file(chat_id, image_path):
-    line = f"{chat_id}:{image_path}\n"
-
-    with open(index_file_path, "a") as file:
-        file.write(line)
 
 def read_prompt():
     if os.path.exists(prompt_file_path):
