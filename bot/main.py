@@ -2,10 +2,12 @@ import requests
 import base64
 import telebot
 import os
+import shutil
 
 bot_token = "5281939613:AAGHxPMQCzWQHs2A9DULc0jQMqkFCT5vv_U"
 api_endpoint = "http://127.0.0.1:7861/sdapi/v1/txt2img"
-image_folder_path = "./pictures"
+pictures_folder_path = "./pictures"
+all_images_folder_path = "./all"
 index_file_path = "./pictures/index.txt"
 prompt_file_path = "./prompt.txt"
 negative_prompt_file_path = "./negativeprompt.txt"
@@ -34,13 +36,15 @@ def handle_message(message):
         if images_base64:
             image_base64 = images_base64[0]
             image_data = base64.b64decode(image_base64)
-            image_path = save_image(image_data)
+
+            # Сохраняем изображение в папке "all"
+            image_path = save_image(image_data, all_images_folder_path)
 
             if image_path:
-                update_index_file(chat_id, image_path)
-
+                # Отправляем изображение и кнопку пользователю
                 with open(image_path, "rb") as file:
                     bot.send_photo(chat_id, photo=file)
+                    bot.send_message(chat_id, "Нажмите кнопку, чтобы сохранить картинку", reply_markup=create_inline_keyboard(image_path))
             else:
                 bot.send_message(chat_id, text="Failed to save the image")
         else:
@@ -48,13 +52,31 @@ def handle_message(message):
     else:
         bot.send_message(chat_id, text="Error sending the request")
 
-def save_image(image_data):
-    if not os.path.exists(image_folder_path):
-        os.makedirs(image_folder_path)
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callback(call):
+    chat_id = call.message.chat.id
+    message_id = call.message.message_id
+    image_path = call.data
 
-    image_index = get_next_image_index()
+    # Перемещаем изображение из папки "all" в папку "pictures"
+    copy_image_path = copy_image(image_path, pictures_folder_path)
+
+    if copy_image_path:
+        # Обновляем индексацию
+        update_index_file(chat_id, copy_image_path)
+
+        bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+        bot.send_message(chat_id, text="Картинка сохранена успешно")
+    else:
+        bot.send_message(chat_id, text="Failed to move the image")
+
+def save_image(image_data, folder_path):
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+    image_index = get_next_image_index(folder_path)
     image_filename = f"{image_index}.jpg"
-    image_path = os.path.join(image_folder_path, image_filename)
+    image_path = os.path.join(folder_path, image_filename)
 
     try:
         with open(image_path, "wb") as file:
@@ -63,7 +85,16 @@ def save_image(image_data):
     except IOError:
         return None
 
-def get_next_image_index():
+def copy_image(image_path, destination_folder):
+    try:
+        image_filename = os.path.basename(image_path)
+        destination_path = os.path.join(destination_folder, image_filename)
+        shutil.copyfile(image_path, destination_path)
+        return destination_path
+    except OSError:
+        return None
+
+def get_next_image_index(folder_path):
     if os.path.exists(index_file_path):
         with open(index_file_path, "r") as file:
             lines = file.readlines()
@@ -96,5 +127,11 @@ def read_negative_prompt():
         return negative_prompt_text
     else:
         return ""
+
+def create_inline_keyboard(image_path):
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    callback_button = telebot.types.InlineKeyboardButton(text="🔥", callback_data=image_path)
+    keyboard.add(callback_button)
+    return keyboard
 
 bot.polling()
