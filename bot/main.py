@@ -17,6 +17,16 @@ negative_prompt_file_path = "./negativeprompt.txt"
 
 bot = telebot.TeleBot(bot_token)
 
+@bot.message_handler(commands=['start'])
+def handle_start(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, "Hello!")
+
+@bot.message_handler(commands=['help'])
+def handle_help(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, "[Example](https://purplesmart.ai/item/e78ab628-1242-40d7-be0a-e7b2113cd166#:~:text=Prompt-,safe,%20%28%28derpibooru_p_95%29%29,%20fluffy%20filly%20princess%20luna,%20%5Bcute,%20smiling,%20beautiful%20eyes%5D,%20artstation,%20detailed%20light,%20soft,%20glowing%20royal%20garden,-Negative%20prompt)", parse_mode='MarkdownV2')
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     chat_id = message.chat.id
