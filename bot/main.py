@@ -19,16 +19,16 @@ bot = telebot.TeleBot(bot_token)
 
 
 def is_image_completely_black(image_data):
-    pattern = b"\x00" * 30  # Паттерн полностью черного пикселя
+    pattern = b"\x00" * 300  # Паттерн полностью черного пикселя
     consecutive_count = 0
 
     for i in range(len(image_data)):
-        if image_data[i:i+30] == pattern:
+        if image_data[i:i+300] == pattern:
             consecutive_count += 1
         else:
             consecutive_count = 0
 
-        if consecutive_count >= 30:
+        if consecutive_count >= 300:
             return True
 
     return False
