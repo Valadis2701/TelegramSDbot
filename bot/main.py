@@ -7,13 +7,17 @@ import datetime
 
 print("Started")
 
-bot_token = "5281939613:AAGHxPMQCzWQHs2A9DULc0jQMqkFCT5vv_U"
+bot_token = "5281939613:AAEt0cQudgZnjqmzD_DlvDpsRVXlffqvMXs"
 api_endpoint = "http://127.0.0.1:7861/sdapi/v1/txt2img"
 pictures_folder_path = "./pictures"
 all_images_folder_path = "./all"
 index_file_path = "./pictures/index.txt"
 prompt_file_path = "./prompt.txt"
 negative_prompt_file_path = "./negativeprompt.txt"
+global current_datetime 
+global formatted_datetime 
+current_datetime = datetime.datetime.now()
+formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
 
 bot = telebot.TeleBot(bot_token)
 
@@ -48,9 +52,8 @@ def handle_message(message):
     chat_id = message.chat.id
     text = read_prompt() + message.text
 
-    response_msg = bot.send_message(chat_id, text="In progress...")
+    response_msg = bot.send_message(chat_id, text="Малюю, це може зайняти до хвилини...")
     message_id = response_msg.message_id
-
     response = requests.post(api_endpoint, json={
         "prompt": text,
         "negative_prompt": read_negative_prompt(),
@@ -79,24 +82,26 @@ def handle_message(message):
             image_data = base64.b64decode(image_base64)
 
             if is_image_completely_black(image_data):
-                bot.send_message(chat_id, text="NSFW!!")
+                bot.send_message(chat_id, text="пробачте, але президент заборонив клопати до 02.07.2023")
             else:
             
             # Сохраняем изображение в папке "all"
+                global current_datetime
+                global formatted_datetime
                 current_datetime = datetime.datetime.now()
-            formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
-            iname = str(chat_id) + ":" + formatted_datetime + ".jpg"
-            image_path = save_image(iname.replace(":","-"), image_data, all_images_folder_path)
-            if image_path:
-                # Отправляем изображение и кнопку пользователю
-                with open(image_path, "rb") as file:
-                    bot.send_photo(chat_id, photo=file, reply_markup=create_inline_keyboard(image_path))
-            else:
-                bot.send_message(chat_id, text="Failed to save the image")
+                formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
+                iname = str(chat_id) + ":" + formatted_datetime + ".jpg"
+                image_path = save_image(iname.replace(":","-"), image_data, all_images_folder_path)
+                if image_path:
+                    # Отправляем изображение и кнопку пользователю
+                    with open(image_path, "rb") as file:
+                        bot.send_photo(chat_id, photo=file, reply_markup=create_inline_keyboard(image_path))
+                else:
+                    bot.send_message(chat_id, text="Щось пiшло не так..")
         else:
-            bot.send_message(chat_id, text="No image received")
+            bot.send_message(chat_id, text="Впав сервер! Пиши @kipo17 щоб подивився що не так")
     else:
-        bot.send_message(chat_id, text="Error sending the request")
+        bot.send_message(chat_id, text="Навiть телеграм не хоче це вiдправляти. Якщо ти бачиш це часто пиши @kipo17")
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
@@ -106,7 +111,7 @@ def handle_callback(call):
 
     if image_path == "cancel":
         try:
-            bot.send_message(chat_id, text="Removed...")
+            bot.send_message(chat_id, text="Видалено! Спробуємо ще раз?")
             bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             bot.delete_message(chat_id, message_id)
             return 
@@ -120,9 +125,9 @@ def handle_callback(call):
     if copy_image_path:
 
         bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
-        bot.send_message(chat_id, text="Картинка сохранена успешно")
+        bot.send_message(chat_id, text="Картинка збережена до публiчного альбому")
     else:
-        bot.send_message(chat_id, text="Failed to move the image")
+        bot.send_message(chat_id, text="Помилка при збереженнi! Якщо ти бачиш це часто пиши @kipo17")
 
 def save_image(image_name, image_data, folder_path):
     if not os.path.exists(folder_path):
