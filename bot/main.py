@@ -57,9 +57,16 @@ def handle_message(message):
         "steps": 40,
         "cfg_scale": 7.5,
         "save_images": "true",
-        "width": 512,
-        "height": 512,
-        "sampler_name": "Euler a"
+        # "width": 512,
+        # "height": 512,
+        "enable_hr": "true",
+        "denoising_strength": 0.7,
+        "firstphase_width": 512,
+        "firstphase_height": 512,
+        "hr_scale": 2,
+        "hr_upscaler": "R-ESRGAN 4x+",
+        "hr_prompt": text,
+        "hr_negative_prompt": read_negative_prompt(),
     })
 
     bot.delete_message(chat_id, message_id)
