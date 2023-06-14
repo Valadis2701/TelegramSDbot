@@ -17,10 +17,26 @@ negative_prompt_file_path = "./negativeprompt.txt"
 
 bot = telebot.TeleBot(bot_token)
 
+
+def is_image_completely_black(image_data):
+    pattern = b"\x00" * 30  # Паттерн полностью черного пикселя
+    consecutive_count = 0
+
+    for i in range(len(image_data)):
+        if image_data[i:i+30] == pattern:
+            consecutive_count += 1
+        else:
+            consecutive_count = 0
+
+        if consecutive_count >= 30:
+            return True
+
+    return False
+
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, "Hello!")
+    bot.send_message(chat_id, "Привіт, я генєрю панєй. /n Ти мені промпти з тегами, я тобі всраті арти!")
 
 @bot.message_handler(commands=['help'])
 def handle_help(message):
@@ -55,13 +71,15 @@ def handle_message(message):
             image_base64 = images_base64[0]
             image_data = base64.b64decode(image_base64)
 
+            if is_image_completely_black(image_data):
+                bot.send_message(chat_id, text="NSFW!!")
+            else:
+            
             # Сохраняем изображение в папке "all"
-            current_datetime = datetime.datetime.now()
-            formatted_datetime = current_datetime.strftime("%d/%m/%Y_%H:%M:%S")
+                current_datetime = datetime.datetime.now()
+            formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
             iname = str(chat_id) + ":" + formatted_datetime + ".jpg"
-            print(iname)
             image_path = save_image(iname.replace(":","-"), image_data, all_images_folder_path)
-
             if image_path:
                 # Отправляем изображение и кнопку пользователю
                 with open(image_path, "rb") as file:
