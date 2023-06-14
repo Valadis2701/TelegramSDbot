@@ -54,7 +54,7 @@ def handle_message(message):
     response = requests.post(api_endpoint, json={
         "prompt": text,
         "negative_prompt": read_negative_prompt(),
-        "steps": 40,
+        "steps": 30,
         "cfg_scale": 7.5,
         "save_images": "true",
         # "width": 512,
