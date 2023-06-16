@@ -4,6 +4,8 @@ import telebot
 import os
 import shutil
 import datetime
+from deep_translator import GoogleTranslator
+
 
 print("Started")
 
@@ -50,9 +52,12 @@ def handle_help(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     chat_id = message.chat.id
-    text = read_prompt() + message.text
+    user_input = message.text
+    translated =  GoogleTranslator(source='auto', target='en').translate(user_input)
+    print(str(chat_id) + "  :  " + user_input + "  ==>  " + translated)
+    text = read_prompt() + translated
 
-    response_msg = bot.send_message(chat_id, text="Малюю, це може зайняти до хвилини...")
+    response_msg = bot.send_message(chat_id, text="Малюю. Це може зайняти до хвилини...")
     message_id = response_msg.message_id
     response = requests.post(api_endpoint, json={
         "prompt": text,
@@ -82,7 +87,7 @@ def handle_message(message):
             image_data = base64.b64decode(image_base64)
 
             if is_image_completely_black(image_data):
-                bot.send_message(chat_id, text="пробачте, але президент заборонив клопати до 02.07.2023")
+                bot.send_message(chat_id, text="пробачте, але президент заборонив клопати до перемоги")
             else:
             
             # Сохраняем изображение в папке "all"
