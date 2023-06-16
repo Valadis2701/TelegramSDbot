@@ -42,7 +42,7 @@ def is_image_completely_black(image_data):
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, "Привіт, я генєрю панєй. /n Ти мені промпти з тегами, я тобі всраті арти!")
+    bot.send_message(chat_id, "Привіт, я генєрю панєй. /n Ти мені промпти з тегами, я тобі всраті арти! Зверни увагу, що теги потрiбно писати українською або англiйською. Iнакше результат буде жахливим")
 
 @bot.message_handler(commands=['help'])
 def handle_help(message):
