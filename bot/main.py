@@ -57,7 +57,7 @@ def handle_message(message):
     print(str(chat_id) + "  :  " + user_input + "  ==>  " + translated)
     text = read_prompt() + translated
 
-    response_msg = bot.send_message(chat_id, text="Малюю. Це може зайняти до хвилини...")
+    response_msg = bot.send_message(chat_id, text="Малюю. Це може зайняти декiлька хвилин якщо багато людей використовує бота одночас")
     message_id = response_msg.message_id
     response = requests.post(api_endpoint, json={
         "prompt": text,
@@ -87,7 +87,7 @@ def handle_message(message):
             image_data = base64.b64decode(image_base64)
 
             if is_image_completely_black(image_data):
-                bot.send_message(chat_id, text="пробачте, але президент заборонив клопати до перемоги")
+                bot.send_message(chat_id, text="Пробачте, але президент заборонив клопати до перемоги")
             else:
             
             # Сохраняем изображение в папке "all"
