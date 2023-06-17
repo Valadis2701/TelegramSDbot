@@ -1,9 +1,10 @@
+import sys
 import telebot
 import os
 
 # Config
-bot_token = "1247537040:AAFa0NAtFcTXEa4PGQerTbQo7QfQ2bQw3G0"
-api_endpoint = "http://217.77.221.234:7860/sdapi/v1/txt2img"
+bot_token = sys.argv[1]
+api_endpoint = sys.argv[2] + "/sdapi/v1/txt2img"
 saved_pictures_folder_path = "./pictures"
 all_images_folder_path = "./all"
 prompt_file_path = "./bot/properties/prompt.txt"
@@ -27,5 +28,10 @@ bot = telebot.TeleBot(bot_token)
 
 
 print("########## CONFIG ############")
-print("Saved pictures path: " + os.path.abspath(saved_pictures_folder_path))
-print("All pictures path: " + os.path.abspath(all_images_folder_path))
+print("\tSaved pictures path:         " + os.path.abspath(saved_pictures_folder_path))
+print("\tAll pictures path:           " + os.path.abspath(all_images_folder_path))
+print("\tBase prompt file path:       " + os.path.abspath(prompt_file_path))
+print("\tNegative prompt file path:   " + os.path.abspath(negative_prompt_file_path))
+print("\tBot token:                   " + bot_token)
+print("\tAPI endpoint:                " + api_endpoint)
+print("##############################\n")
