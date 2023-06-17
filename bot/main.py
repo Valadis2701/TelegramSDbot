@@ -6,22 +6,26 @@ import shutil
 import datetime
 from deep_translator import GoogleTranslator
 
-
 print("Started")
 
 bot_token = "5281939613:AAEt0cQudgZnjqmzD_DlvDpsRVXlffqvMXs"
 api_endpoint = "http://127.0.0.1:7861/sdapi/v1/txt2img"
 pictures_folder_path = "./pictures"
 all_images_folder_path = "./all"
-index_file_path = "./pictures/index.txt"
 prompt_file_path = "./prompt.txt"
 negative_prompt_file_path = "./negativeprompt.txt"
-global current_datetime 
-global formatted_datetime 
+
+global current_datetime
+global formatted_datetime
 current_datetime = datetime.datetime.now()
 formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
 
+
+start_msg = "Привіт, я генєрю панєй. \n Ти мені промпти з тегами, я тобі всраті арти! Зверни увагу, що теги потрiбно писати українською або англiйською. Iнакше результат буде жахливим"
+help_msg = "[Example](https://purplesmart.ai/item/e78ab628-1242-40d7-be0a-e7b2113cd166#:~:text=Prompt-,safe,%20%28%28derpibooru_p_95%29%29,%20fluffy%20filly%20princess%20luna,%20%5Bcute,%20smiling,%20beautiful%20eyes%5D,%20artstation,%20detailed%20light,%20soft,%20glowing%20royal%20garden,-Negative%20prompt)"
+
 bot = telebot.TeleBot(bot_token)
+
 
 
 def is_image_completely_black(image_data):
@@ -42,12 +46,12 @@ def is_image_completely_black(image_data):
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, "Привіт, я генєрю панєй. /n Ти мені промпти з тегами, я тобі всраті арти! Зверни увагу, що теги потрiбно писати українською або англiйською. Iнакше результат буде жахливим")
+    bot.send_message(chat_id, start_msg)
 
 @bot.message_handler(commands=['help'])
 def handle_help(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, "[Example](https://purplesmart.ai/item/e78ab628-1242-40d7-be0a-e7b2113cd166#:~:text=Prompt-,safe,%20%28%28derpibooru_p_95%29%29,%20fluffy%20filly%20princess%20luna,%20%5Bcute,%20smiling,%20beautiful%20eyes%5D,%20artstation,%20detailed%20light,%20soft,%20glowing%20royal%20garden,-Negative%20prompt)", parse_mode='MarkdownV2')
+    bot.send_message(chat_id, help_msg, parse_mode='MarkdownV2')
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -67,7 +71,7 @@ def handle_message(message):
         "save_images": "true",
         # "width": 512,
         # "height": 512,
-        "enable_hr": "true",
+        "enable_hr": "false",
         "denoising_strength": 0.7,
         "firstphase_width": 512,
         "firstphase_height": 512,
@@ -156,18 +160,6 @@ def copy_image(image_path, destination_folder):
         return destination_path
     except OSError:
         return None
-
-def get_next_image_index(folder_path):
-    if os.path.exists(index_file_path):
-        with open(index_file_path, "r") as file:
-            lines = file.readlines()
-
-        if lines:
-            last_line = lines[-1].strip()
-            last_index = int(last_line.split(":")[0])
-            return last_index + 1
-
-    return 0
 
 def read_prompt():
     if os.path.exists(prompt_file_path):
