@@ -6,7 +6,11 @@ import shutil
 import datetime
 from deep_translator import GoogleTranslator
 
-print("Started")
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from orm_entities import *
+from utils import *
 
 bot_token = "5281939613:AAEt0cQudgZnjqmzD_DlvDpsRVXlffqvMXs"
 api_endpoint = "http://127.0.0.1:7861/sdapi/v1/txt2img"
@@ -20,20 +24,35 @@ global formatted_datetime
 current_datetime = datetime.datetime.now()
 formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
 
-
 start_msg = "Привіт, я генєрю панєй. \n Ти мені промпти з тегами, я тобі всраті арти! Зверни увагу, що теги потрiбно писати українською або англiйською. Iнакше результат буде жахливим"
 help_msg = "[Example](https://purplesmart.ai/item/e78ab628-1242-40d7-be0a-e7b2113cd166#:~:text=Prompt-,safe,%20%28%28derpibooru_p_95%29%29,%20fluffy%20filly%20princess%20luna,%20%5Bcute,%20smiling,%20beautiful%20eyes%5D,%20artstation,%20detailed%20light,%20soft,%20glowing%20royal%20garden,-Negative%20prompt)"
 
+print("Starting")
+
+print("db setup")
+# Create an engine and session
+engine = create_engine('sqlite:///database.db', echo=True, connect_args={'check_same_thread': False})
+Base.metadata.create_all(engine)
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# Example usage
+users = session.query(User).all()
+pp(users)
+
+# Don't forget to commit the changes and close the session when done
+session.commit()
+# session.close()
+
+print("Bot setup")
 bot = telebot.TeleBot(bot_token)
 
-
-
 def is_image_completely_black(image_data):
-    pattern = b"\x00" * 300  # Паттерн полностью черного пикселя
+    black_px_pattern = b"\x00" * 300
     consecutive_count = 0
 
     for i in range(len(image_data)):
-        if image_data[i:i+300] == pattern:
+        if image_data[i:i + 300] == black_px_pattern:
             consecutive_count += 1
         else:
             consecutive_count = 0
@@ -43,26 +62,76 @@ def is_image_completely_black(image_data):
 
     return False
 
+
+@bot.edited_message_handler(func=lambda message: True)
+def your_func(message):
+    print("Update: " + message.text)
+
 @bot.message_handler(commands=['start'])
 def handle_start(message):
+    print_message(message)
+
     chat_id = message.chat.id
     bot.send_message(chat_id, start_msg)
+
 
 @bot.message_handler(commands=['help'])
 def handle_help(message):
     chat_id = message.chat.id
     bot.send_message(chat_id, help_msg, parse_mode='MarkdownV2')
 
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
+    print_message(message)
+
     chat_id = message.chat.id
+    username = message.from_user.username
+    name = message.from_user.first_name
+    
     user_input = message.text
-    translated =  GoogleTranslator(source='auto', target='en').translate(user_input)
+    translated = GoogleTranslator(source='auto', target='en').translate(user_input)
     print(str(chat_id) + "  :  " + user_input + "  ==>  " + translated)
     text = read_prompt() + translated
 
-    response_msg = bot.send_message(chat_id, text="Малюю. Це може зайняти декiлька хвилин якщо багато людей використовує бота одночас")
+    response_msg = bot.send_message(chat_id,
+                                    text="Малюю. Це може зайняти декiлька хвилин якщо багато людей використовує бота одночас")
     message_id = response_msg.message_id
+    response = generate_pone(text)
+
+    bot.delete_message(chat_id, message_id)
+
+    if response.status_code == 200:
+        images_base64 = response.json().get("images")
+
+        if images_base64:
+            image_base64 = images_base64[0]
+            image_data = base64.b64decode(image_base64)
+
+            if is_image_completely_black(image_data):
+                bot.send_message(chat_id, text="Пробачте, але президент заборонив клопати до перемоги")
+            else:
+
+                # Сохраняем изображение в папке "all"
+                global current_datetime
+                global formatted_datetime
+                current_datetime = datetime.datetime.now()
+                formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
+                iname = str(chat_id) + ":" + formatted_datetime + ".jpg"
+                image_path = save_image(iname.replace(":", "-"), image_data, all_images_folder_path)
+                if image_path:
+                    # Отправляем изображение и кнопку пользователю
+                    with open(image_path, "rb") as file:
+                        bot.send_photo(chat_id, photo=file, reply_markup=create_inline_keyboard(image_path))
+                else:
+                    bot.send_message(chat_id, text="Щось пiшло не так..")
+        else:
+            bot.send_message(chat_id, text="Впав сервер! Пиши @kipo17 щоб подивився що не так")
+    else:
+        bot.send_message(chat_id, text="Навiть телеграм не хоче це вiдправляти. Якщо ти бачиш це часто пиши @kipo17")
+
+
+def generate_pone(text):
     response = requests.post(api_endpoint, json={
         "prompt": text,
         "negative_prompt": read_negative_prompt(),
@@ -80,37 +149,8 @@ def handle_message(message):
         "hr_prompt": text,
         "hr_negative_prompt": read_negative_prompt(),
     })
+    return response
 
-    bot.delete_message(chat_id, message_id)
-
-    if response.status_code == 200:
-        images_base64 = response.json().get("images")
-
-        if images_base64:
-            image_base64 = images_base64[0]
-            image_data = base64.b64decode(image_base64)
-
-            if is_image_completely_black(image_data):
-                bot.send_message(chat_id, text="Пробачте, але президент заборонив клопати до перемоги")
-            else:
-            
-            # Сохраняем изображение в папке "all"
-                global current_datetime
-                global formatted_datetime
-                current_datetime = datetime.datetime.now()
-                formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
-                iname = str(chat_id) + ":" + formatted_datetime + ".jpg"
-                image_path = save_image(iname.replace(":","-"), image_data, all_images_folder_path)
-                if image_path:
-                    # Отправляем изображение и кнопку пользователю
-                    with open(image_path, "rb") as file:
-                        bot.send_photo(chat_id, photo=file, reply_markup=create_inline_keyboard(image_path))
-                else:
-                    bot.send_message(chat_id, text="Щось пiшло не так..")
-        else:
-            bot.send_message(chat_id, text="Впав сервер! Пиши @kipo17 щоб подивився що не так")
-    else:
-        bot.send_message(chat_id, text="Навiть телеграм не хоче це вiдправляти. Якщо ти бачиш це часто пиши @kipo17")
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
@@ -123,11 +163,11 @@ def handle_callback(call):
             bot.send_message(chat_id, text="Видалено! Спробуємо ще раз?")
             bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
             bot.delete_message(chat_id, message_id)
-            return 
+            return
         except Exception:
             print("Нам ПиЗдА!!")
             return None
-    
+
     # Перемещаем изображение из папки "all" в папку "pictures"
     copy_image_path = copy_image(image_path, pictures_folder_path)
 
@@ -138,11 +178,11 @@ def handle_callback(call):
     else:
         bot.send_message(chat_id, text="Помилка при збереженнi! Якщо ти бачиш це часто пиши @kipo17")
 
+
 def save_image(image_name, image_data, folder_path):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
- 
     image_path = os.path.join(folder_path, image_name)
 
     try:
@@ -151,6 +191,7 @@ def save_image(image_name, image_data, folder_path):
         return image_path
     except IOError:
         return None
+
 
 def copy_image(image_path, destination_folder):
     try:
@@ -161,6 +202,7 @@ def copy_image(image_path, destination_folder):
     except OSError:
         return None
 
+
 def read_prompt():
     if os.path.exists(prompt_file_path):
         with open(prompt_file_path, "r") as file:
@@ -168,6 +210,7 @@ def read_prompt():
         return prompt_text
     else:
         return ""
+
 
 def read_negative_prompt():
     if os.path.exists(negative_prompt_file_path):
@@ -177,6 +220,7 @@ def read_negative_prompt():
     else:
         return ""
 
+
 def create_inline_keyboard(image_path):
     keyboard = telebot.types.InlineKeyboardMarkup()
     approve_button = telebot.types.InlineKeyboardButton(text="🔥", callback_data=image_path)
@@ -184,5 +228,6 @@ def create_inline_keyboard(image_path):
     keyboard.add(approve_button)
     keyboard.add(cancel_button)
     return keyboard
+
 
 bot.polling()
