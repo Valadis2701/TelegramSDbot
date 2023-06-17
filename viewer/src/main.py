@@ -1,9 +1,11 @@
 import os
 import sys
 import time
+import cv2
+import numpy as np
+import sys
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import cv2
 
 class ImageEventHandler(FileSystemEventHandler):
     def __init__(self, folder_with_pics, display_duration):
@@ -48,12 +50,9 @@ class ImageEventHandler(FileSystemEventHandler):
         print("Path: " + abs_pic_path)
 
         image = cv2.imread(abs_pic_path)
-        cv2.imshow("Fullscreen Image", image)
+        frame_delay = self.display_duration * 1000
 
-        k = cv2.waitKey(self.display_duration*1000)
-        if k == 27:
-            sys.exit()
-        
+        self.render_image_with_fade_in(image, frame_delay)
 
     def display_new_image(self, pic):
         abs_pic_path = os.path.abspath(pic)
@@ -74,12 +73,36 @@ class ImageEventHandler(FileSystemEventHandler):
         cv2.putText(image, text, (text_x, text_y), font, font_scale, color, thickness)
 
         # Display the image
-        cv2.imshow("Fullscreen Image", image)
+        self.render_image_with_fade_in(image, self.display_duration * 1000 * 2)
+            
+    def render_image_with_fade_in(self, image, frame_delay):
+        # Create a blank canvas with the same size and data type as the image
+        canvas = np.zeros_like(image, dtype=np.float32)
 
-        k = cv2.waitKey(self.display_duration * 1000 * 2)
+        # Define the duration for each fade step in milliseconds
+        fade_duration = 500  # 0.5 seconds
+
+        # Calculate the number of steps for fade-in and fade-out
+        num_steps = fade_duration // 10  # Assuming 10ms delay between steps
+
+        # Perform fade-in
+        for alpha in np.linspace(0, 255, num_steps):
+            alpha = int(alpha)
+            alpha_blend = cv2.addWeighted(image, alpha / 255.0, canvas.astype(image.dtype), 1 - alpha / 255.0, 0)
+            cv2.imshow("Fullscreen Image", alpha_blend)
+            cv2.waitKey(10)  # 10ms delay between steps
+        # Wait for the display duration without any fading
+        k = cv2.waitKey(frame_delay)
+
         if k == 27:
             sys.exit()
-            
+
+        # Perform fade-out
+        for alpha in np.linspace(255, 0, num_steps):
+            alpha = int(alpha)
+            alpha_blend = cv2.addWeighted(image, alpha / 255.0, canvas.astype(image.dtype), 1 - alpha / 255.0, 0)
+            cv2.imshow("Fullscreen Image", alpha_blend)
+            cv2.waitKey(10)  # 10ms delay between steps
 
     def on_created(self, event):
         if event.is_directory:
