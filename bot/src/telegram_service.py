@@ -1,66 +1,40 @@
 import requests
 import base64
-import telebot
-import os
-import shutil
 import datetime
+import telebot
 from deep_translator import GoogleTranslator
+from user_service import save_new_prompt_for_user
+from bot_config import bot
+from user_service import get_registered_user_message
+from file_utils import copy_image, fetch_base_prompt
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from file_utils import fetch_negative_prompt, save_image
+from utils import is_image_completely_black
+from user_service import init_user_context
 
-from orm_entities import *
-from utils import *
+from utils import print_message
 
-bot_token = "5281939613:AAEt0cQudgZnjqmzD_DlvDpsRVXlffqvMXs"
-api_endpoint = "http://127.0.0.1:7861/sdapi/v1/txt2img"
+bot_token = "bot_token"
+api_endpoint = "base_url/sdapi/v1/txt2img"
 pictures_folder_path = "./pictures"
 all_images_folder_path = "./all"
-prompt_file_path = "./prompt.txt"
-negative_prompt_file_path = "./negativeprompt.txt"
+
+
+ADMIN_LIST = [
+    455937183 # HalavicH
+]
+
+start_msg = "Привіт, я генєрю панєй. \n Ти мені промпти з тегами, я тобі всраті арти! Зверни увагу, що теги потрiбно писати українською або англiйською. Iнакше результат буде жахливим"
+help_msg = "[Example](https://purplesmart.ai/item/e78ab628-1242-40d7-be0a-e7b2113cd166#:~:text=Prompt-,safe,%20%28%28derpibooru_p_95%29%29,%20fluffy%20filly%20princess%20luna,%20%5Bcute,%20smiling,%20beautiful%20eyes%5D,%20artstation,%20detailed%20light,%20soft,%20glowing%20royal%20garden,-Negative%20prompt)"
+in_progress_msg = "Малюю. Це може зайняти декiлька хвилин якщо багато людей використовує бота одночас"
+no_perrmission_msg = "You don't have permission to do it"
+nsfw_content = "Пробачте, але президент заборонив клопати до перемоги"
+
 
 global current_datetime
 global formatted_datetime
 current_datetime = datetime.datetime.now()
 formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
-
-start_msg = "Привіт, я генєрю панєй. \n Ти мені промпти з тегами, я тобі всраті арти! Зверни увагу, що теги потрiбно писати українською або англiйською. Iнакше результат буде жахливим"
-help_msg = "[Example](https://purplesmart.ai/item/e78ab628-1242-40d7-be0a-e7b2113cd166#:~:text=Prompt-,safe,%20%28%28derpibooru_p_95%29%29,%20fluffy%20filly%20princess%20luna,%20%5Bcute,%20smiling,%20beautiful%20eyes%5D,%20artstation,%20detailed%20light,%20soft,%20glowing%20royal%20garden,-Negative%20prompt)"
-
-print("Starting")
-
-print("db setup")
-# Create an engine and session
-engine = create_engine('sqlite:///database.db', echo=True, connect_args={'check_same_thread': False})
-Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-session = Session()
-
-# Example usage
-users = session.query(User).all()
-pp(users)
-
-# Don't forget to commit the changes and close the session when done
-session.commit()
-# session.close()
-
-print("Bot setup")
-bot = telebot.TeleBot(bot_token)
-
-def is_image_completely_black(image_data):
-    black_px_pattern = b"\x00" * 300
-    consecutive_count = 0
-
-    for i in range(len(image_data)):
-        if image_data[i:i + 300] == black_px_pattern:
-            consecutive_count += 1
-        else:
-            consecutive_count = 0
-
-        if consecutive_count >= 300:
-            return True
-
-    return False
 
 
 @bot.edited_message_handler(func=lambda message: True)
@@ -70,6 +44,7 @@ def your_func(message):
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     print_message(message)
+    init_user_context(message.from_user)
 
     chat_id = message.chat.id
     bot.send_message(chat_id, start_msg)
@@ -77,30 +52,77 @@ def handle_start(message):
 
 @bot.message_handler(commands=['help'])
 def handle_help(message):
+    init_user_context(message.from_user)
     chat_id = message.chat.id
     bot.send_message(chat_id, help_msg, parse_mode='MarkdownV2')
 
+@bot.message_handler(commands=['list_user'])
+def handle_list_users(message):
+    init_user_context(message.from_user)
+    chat_id = message.from_user.id
+    if is_admin(chat_id) == False:
+        bot.send_message(chat_id, no_perrmission_msg)
+        return
 
+    # user_json = 
+
+    bot.send_message(chat_id, get_registered_user_message())
+
+# Message handler 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
+    init_user_context(message.from_user)
     print_message(message)
-
     chat_id = message.chat.id
-    username = message.from_user.username
-    name = message.from_user.first_name
     
-    user_input = message.text
-    translated = GoogleTranslator(source='auto', target='en').translate(user_input)
-    print(str(chat_id) + "  :  " + user_input + "  ==>  " + translated)
-    text = read_prompt() + translated
+    original_prompt = message.text
+    prepared_prompt = prepare_prompt(original_prompt, chat_id)
+    save_new_prompt_for_user(message, prepared_prompt)
 
-    response_msg = bot.send_message(chat_id,
-                                    text="Малюю. Це може зайняти декiлька хвилин якщо багато людей використовує бота одночас")
+    try:
+        response = generate_pone(prepared_prompt, chat_id)
+    except Exception as err:
+        print("Can't connect to the AI engine ", err)
+        bot.send_message(chat_id, "Упс. Хтось вкрав відеокарту. Не можу малювати в даний час. Якщо це повторюється часто - пиши @Kipo17")
+        return;
+
+    handle_response(chat_id, response)
+
+
+def is_admin(id) -> bool:
+    if id in ADMIN_LIST:
+        return True
+    else:
+        return False
+    
+
+def generate_pone(prompt, chat_id):
+    response_msg = bot.send_message(chat_id, text=in_progress_msg)
+
+    response = requests.post(api_endpoint, json={
+        "prompt": prompt,
+        "negative_prompt": fetch_negative_prompt(),
+        "steps": 30,
+        "cfg_scale": 7.5,
+        "save_images": "true",
+        # "width": 512,
+        # "height": 512,
+        "enable_hr": "false",
+        "denoising_strength": 0.7,
+        "firstphase_width": 512,
+        "firstphase_height": 512,
+        "hr_scale": 2,
+        "hr_upscaler": "R-ESRGAN 4x+",
+        "hr_prompt": prompt,
+        "hr_negative_prompt": fetch_negative_prompt(),
+    })
+
     message_id = response_msg.message_id
-    response = generate_pone(text)
-
     bot.delete_message(chat_id, message_id)
 
+    return response
+
+def handle_response(chat_id, response):
     if response.status_code == 200:
         images_base64 = response.json().get("images")
 
@@ -109,9 +131,8 @@ def handle_message(message):
             image_data = base64.b64decode(image_base64)
 
             if is_image_completely_black(image_data):
-                bot.send_message(chat_id, text="Пробачте, але президент заборонив клопати до перемоги")
+                bot.send_message(chat_id, text=nsfw_content)
             else:
-
                 # Сохраняем изображение в папке "all"
                 global current_datetime
                 global formatted_datetime
@@ -131,34 +152,20 @@ def handle_message(message):
         bot.send_message(chat_id, text="Навiть телеграм не хоче це вiдправляти. Якщо ти бачиш це часто пиши @kipo17")
 
 
-def generate_pone(text):
-    response = requests.post(api_endpoint, json={
-        "prompt": text,
-        "negative_prompt": read_negative_prompt(),
-        "steps": 30,
-        "cfg_scale": 7.5,
-        "save_images": "true",
-        # "width": 512,
-        # "height": 512,
-        "enable_hr": "false",
-        "denoising_strength": 0.7,
-        "firstphase_width": 512,
-        "firstphase_height": 512,
-        "hr_scale": 2,
-        "hr_upscaler": "R-ESRGAN 4x+",
-        "hr_prompt": text,
-        "hr_negative_prompt": read_negative_prompt(),
-    })
-    return response
+def prepare_prompt(user_input, chat_id):
+    translated = GoogleTranslator(source='auto', target='en').translate(user_input)
+    print(str(chat_id) + "  :  " + user_input + "  ==>  " + translated)
+    text = fetch_base_prompt() + translated
+    return text
 
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     chat_id = call.message.chat.id
     message_id = call.message.message_id
-    image_path = call.data
+    callback_data = call.data
 
-    if image_path == "cancel":
+    if callback_data == "cancel":
         try:
             bot.send_message(chat_id, text="Видалено! Спробуємо ще раз?")
             bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
@@ -169,56 +176,13 @@ def handle_callback(call):
             return None
 
     # Перемещаем изображение из папки "all" в папку "pictures"
-    copy_image_path = copy_image(image_path, pictures_folder_path)
+    copy_image_path = copy_image(callback_data, pictures_folder_path)
 
     if copy_image_path:
-
         bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
         bot.send_message(chat_id, text="Картинка збережена до публiчного альбому")
     else:
         bot.send_message(chat_id, text="Помилка при збереженнi! Якщо ти бачиш це часто пиши @kipo17")
-
-
-def save_image(image_name, image_data, folder_path):
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
-
-    image_path = os.path.join(folder_path, image_name)
-
-    try:
-        with open(image_path, "wb") as file:
-            file.write(image_data)
-        return image_path
-    except IOError:
-        return None
-
-
-def copy_image(image_path, destination_folder):
-    try:
-        image_filename = os.path.basename(image_path)
-        destination_path = os.path.join(destination_folder, image_filename)
-        shutil.copyfile(image_path, destination_path)
-        return destination_path
-    except OSError:
-        return None
-
-
-def read_prompt():
-    if os.path.exists(prompt_file_path):
-        with open(prompt_file_path, "r") as file:
-            prompt_text = file.read()
-        return prompt_text
-    else:
-        return ""
-
-
-def read_negative_prompt():
-    if os.path.exists(negative_prompt_file_path):
-        with open(negative_prompt_file_path, "r") as file:
-            negative_prompt_text = file.read()
-        return negative_prompt_text
-    else:
-        return ""
 
 
 def create_inline_keyboard(image_path):
@@ -228,6 +192,3 @@ def create_inline_keyboard(image_path):
     keyboard.add(approve_button)
     keyboard.add(cancel_button)
     return keyboard
-
-
-bot.polling()

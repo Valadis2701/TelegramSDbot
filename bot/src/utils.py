@@ -18,3 +18,19 @@ def print_message(message, prefix=''):
             pp(value)
         else:
             print(f'|||{prefix}{pp(attr)}: {pp(value)}')
+
+def is_image_completely_black(image_data):
+    black_px_pattern = b"\x00" * 300
+    consecutive_count = 0
+
+    for i in range(len(image_data)):
+        if image_data[i:i + 300] == black_px_pattern:
+            consecutive_count += 1
+        else:
+            consecutive_count = 0
+
+        if consecutive_count >= 300:
+            return True
+
+    return False
+
