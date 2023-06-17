@@ -44,6 +44,8 @@ class Result(Base):
 
     id = Column(Integer, primary_key=True)
     
+    chat_id = Column(Integer)
+    response_message_id = Column(Integer)
     date = Column(String)
     is_saved = Column(Boolean)
     is_removed = Column(Boolean)
@@ -63,6 +65,11 @@ db_session = Session()
 def get_all_users():
     users = db_session.query(User).all()
     pp(users)
-    db_session.commit()
+    # db_session.commit()
     return users
 
+def get_user_by_chat_id(chat_id):
+    return db_session.query(User).filter_by(chat_id=chat_id).first()
+
+def get_prompt_by_message_id(chat_id, message_id):
+    return db_session.query(Prompt).filter_by(chat_id=chat_id, message_id=message_id).first()

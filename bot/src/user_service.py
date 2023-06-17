@@ -1,5 +1,5 @@
 import datetime
-import json
+import repository
 from file_utils import fetch_base_prompt, fetch_negative_prompt
 from utils import pp
 # from telebot import User
@@ -12,7 +12,7 @@ def init_user_context(from_user):
                     chat_id=from_user.id,
                     lang=from_user.language_code)
     
-    user = db_session.query(User).filter_by(chat_id=from_user.id).first()
+    user = repository.get_user_by_chat_id(from_user.id)
 
     if user is not None:
         print(f"User {user.name}:{user.chat_id} already initialized.")

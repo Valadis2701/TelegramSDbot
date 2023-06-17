@@ -2,77 +2,45 @@ import requests
 import base64
 import datetime
 import telebot
+import repository
+
 from deep_translator import GoogleTranslator
-from user_service import save_new_prompt_for_user
-from bot_config import bot
-from user_service import get_registered_user_message
-from file_utils import copy_image, fetch_base_prompt
-
-from file_utils import fetch_negative_prompt, save_image
-from utils import is_image_completely_black
-from user_service import init_user_context
-
-from utils import print_message
-
-bot_token = "bot_token"
-api_endpoint = "base_url/sdapi/v1/txt2img"
-pictures_folder_path = "./pictures"
-all_images_folder_path = "./all"
-
-
-ADMIN_LIST = [
-    455937183 # HalavicH
-]
-
-start_msg = "Привіт, я генєрю панєй. \n Ти мені промпти з тегами, я тобі всраті арти! Зверни увагу, що теги потрiбно писати українською або англiйською. Iнакше результат буде жахливим"
-help_msg = "[Example](https://purplesmart.ai/item/e78ab628-1242-40d7-be0a-e7b2113cd166#:~:text=Prompt-,safe,%20%28%28derpibooru_p_95%29%29,%20fluffy%20filly%20princess%20luna,%20%5Bcute,%20smiling,%20beautiful%20eyes%5D,%20artstation,%20detailed%20light,%20soft,%20glowing%20royal%20garden,-Negative%20prompt)"
-in_progress_msg = "Малюю. Це може зайняти декiлька хвилин якщо багато людей використовує бота одночас"
-no_perrmission_msg = "You don't have permission to do it"
-nsfw_content = "Пробачте, але президент заборонив клопати до перемоги"
-
+from user_service import *
+from file_utils import *
+from utils import *
+from user_service import *
+from bot_config import *
 
 global current_datetime
 global formatted_datetime
 current_datetime = datetime.datetime.now()
 formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
 
-
-@bot.edited_message_handler(func=lambda message: True)
-def your_func(message):
-    print("Update: " + message.text)
-
-@bot.message_handler(commands=['start'])
-def handle_start(message):
-    print_message(message)
+def start_handler(message):
     init_user_context(message.from_user)
 
     chat_id = message.chat.id
     bot.send_message(chat_id, start_msg)
 
+def edit_handler(message):
+    pass
 
-@bot.message_handler(commands=['help'])
-def handle_help(message):
+def help_handler(message):
     init_user_context(message.from_user)
     chat_id = message.chat.id
     bot.send_message(chat_id, help_msg, parse_mode='MarkdownV2')
 
-@bot.message_handler(commands=['list_user'])
-def handle_list_users(message):
+def list_users_handler(message):
     init_user_context(message.from_user)
     chat_id = message.from_user.id
     if is_admin(chat_id) == False:
         bot.send_message(chat_id, no_perrmission_msg)
         return
 
-    # user_json = 
-
     bot.send_message(chat_id, get_registered_user_message())
 
-# Message handler 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
+def text_handler(message):
     init_user_context(message.from_user)
-    print_message(message)
     chat_id = message.chat.id
     
     original_prompt = message.text
@@ -88,6 +56,31 @@ def handle_message(message):
 
     handle_response(chat_id, response)
 
+def callback_handler(call):
+    chat_id = call.message.chat.id
+    message_id = call.message.message_id
+    data = call.data
+
+    if data == "cancel":
+        try:
+            bot.send_message(chat_id, text="Видалено! Спробуємо ще раз?")
+            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            bot.delete_message(chat_id, message_id)
+            return
+        except Exception:
+            print("Нам ПиЗдА!!")
+            return None
+    elif data == "retry":
+        bot.send_message(chat_id, "TODO: Retrying")
+        retry_drawing(chat_id, message_id)
+    else:
+        copy_image_path = copy_image(data, pictures_folder_path)
+
+        if copy_image_path:
+            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            bot.send_message(chat_id, text="Картинка збережена до публiчного альбому")
+        else:
+            bot.send_message(chat_id, text="Помилка при збереженi! Якщо ти бачиш це часто пиши @kipo17")
 
 def is_admin(id) -> bool:
     if id in ADMIN_LIST:
@@ -159,36 +152,37 @@ def prepare_prompt(user_input, chat_id):
     return text
 
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callback(call):
-    chat_id = call.message.chat.id
-    message_id = call.message.message_id
-    callback_data = call.data
-
-    if callback_data == "cancel":
-        try:
-            bot.send_message(chat_id, text="Видалено! Спробуємо ще раз?")
-            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
-            bot.delete_message(chat_id, message_id)
-            return
-        except Exception:
-            print("Нам ПиЗдА!!")
-            return None
-
-    # Перемещаем изображение из папки "all" в папку "pictures"
-    copy_image_path = copy_image(callback_data, pictures_folder_path)
-
-    if copy_image_path:
-        bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
-        bot.send_message(chat_id, text="Картинка збережена до публiчного альбому")
-    else:
-        bot.send_message(chat_id, text="Помилка при збереженнi! Якщо ти бачиш це часто пиши @kipo17")
-
-
 def create_inline_keyboard(image_path):
-    keyboard = telebot.types.InlineKeyboardMarkup()
+    keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
     approve_button = telebot.types.InlineKeyboardButton(text="🔥", callback_data=image_path)
     cancel_button = telebot.types.InlineKeyboardButton(text="❌", callback_data="cancel")
-    keyboard.add(approve_button)
-    keyboard.add(cancel_button)
+    retry_button = telebot.types.InlineKeyboardButton(text="Інший варіант", callback_data="retry")
+    keyboard.add(approve_button, cancel_button)
+    keyboard.add(retry_button)
     return keyboard
+
+def retry_drawing(chat_id, message_id):
+    user = repository.get_user_by_chat_id(chat_id)
+    if user is None:
+        print("Can't find user with id: ", chat_id)
+        bot.send_message(chat_id, "Щось пішло не так. Повідом @Kipo17")
+        return
+    
+    prompt = repository.get_prompt_by_message_id(chat_id, message_id)
+    if prompt is None:
+        print(f"Can't find prompt for user: {chat_id} for message_id: {message_id}")
+        bot.send_message(chat_id, "Щось пішло не так. Повідом @Kipo17")
+        return
+
+    print("Retrying generation for: " + prompt.final_prompt)
+    bot.send_message(chat_id, "Малюю інший варіант для запиту:", prompt.original_prompt)
+    # save_new_prompt_for_user(message, prepared_prompt)
+
+    try:
+        response = generate_pone(prompt.final_prompt, chat_id)
+    except Exception as err:
+        print("Can't connect to the AI engine ", err)
+        bot.send_message(chat_id, "Упс. Хтось вкрав відеокарту. Не можу малювати в даний час. Якщо це повторюється часто - пиши @Kipo17")
+        return
+
+    handle_response(chat_id, response)
