@@ -4,17 +4,13 @@ import datetime
 import telebot
 import repository
 
+from repository import Result
 from deep_translator import GoogleTranslator
 from user_service import *
 from file_utils import *
 from utils import *
 from user_service import *
 from bot_config import *
-
-global current_datetime
-global formatted_datetime
-current_datetime = datetime.datetime.now()
-formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
 
 def start_handler(message):
     init_user_context(message.from_user)
@@ -45,16 +41,16 @@ def text_handler(message):
     
     original_prompt = message.text
     prepared_prompt = prepare_prompt(original_prompt, chat_id)
-    save_new_prompt_for_user(message, prepared_prompt)
+    prompt = save_new_prompt_for_user(message, prepared_prompt)
 
     try:
         response = generate_pone(prepared_prompt, chat_id)
     except Exception as err:
         print("Can't connect to the AI engine ", err)
         bot.send_message(chat_id, "Упс. Хтось вкрав відеокарту. Не можу малювати в даний час. Якщо це повторюється часто - пиши @Kipo17")
-        return;
+        return
 
-    handle_response(chat_id, response)
+    handle_response(chat_id, response, prompt)
 
 def callback_handler(call):
     chat_id = call.message.chat.id
@@ -63,22 +59,22 @@ def callback_handler(call):
 
     if data == "cancel":
         try:
-            bot.send_message(chat_id, text="Видалено! Спробуємо ще раз?")
-            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            bot.send_message(chat_id, text="Видалено! Спробуй інші теги. Опиши більш точно")
             bot.delete_message(chat_id, message_id)
+            repository.mark_result_as_deleted(chat_id, message_id)
             return
         except Exception:
             print("Нам ПиЗдА!!")
             return None
     elif data == "retry":
-        bot.send_message(chat_id, "TODO: Retrying")
         retry_drawing(chat_id, message_id)
     else:
-        copy_image_path = copy_image(data, pictures_folder_path)
+        copy_image_path = copy_image(data, saved_pictures_folder_path)
 
         if copy_image_path:
-            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None)
+            bot.edit_message_reply_markup(chat_id, message_id, reply_markup=make_retry_image_keyboard())
             bot.send_message(chat_id, text="Картинка збережена до публiчного альбому")
+            repository.mark_result_as_saved(chat_id, message_id)
         else:
             bot.send_message(chat_id, text="Помилка при збереженi! Якщо ти бачиш це часто пиши @kipo17")
 
@@ -115,34 +111,53 @@ def generate_pone(prompt, chat_id):
 
     return response
 
-def handle_response(chat_id, response):
-    if response.status_code == 200:
-        images_base64 = response.json().get("images")
-
-        if images_base64:
-            image_base64 = images_base64[0]
-            image_data = base64.b64decode(image_base64)
-
-            if is_image_completely_black(image_data):
-                bot.send_message(chat_id, text=nsfw_content)
-            else:
-                # Сохраняем изображение в папке "all"
-                global current_datetime
-                global formatted_datetime
-                current_datetime = datetime.datetime.now()
-                formatted_datetime = current_datetime.strftime("%d-%m-%Y_%H:%M:%S")
-                iname = str(chat_id) + ":" + formatted_datetime + ".jpg"
-                image_path = save_image(iname.replace(":", "-"), image_data, all_images_folder_path)
-                if image_path:
-                    # Отправляем изображение и кнопку пользователю
-                    with open(image_path, "rb") as file:
-                        bot.send_photo(chat_id, photo=file, reply_markup=create_inline_keyboard(image_path))
-                else:
-                    bot.send_message(chat_id, text="Щось пiшло не так..")
-        else:
-            bot.send_message(chat_id, text="Впав сервер! Пиши @kipo17 щоб подивився що не так")
-    else:
+def handle_response(chat_id, response, prompt_entity):
+    if response.status_code != 200:
         bot.send_message(chat_id, text="Навiть телеграм не хоче це вiдправляти. Якщо ти бачиш це часто пиши @kipo17")
+        print("AI request failed")
+        return
+
+    image_list_base64 = response.json().get("images")
+    if image_list_base64 is None:
+        bot.send_message(chat_id, text="Впав сервер! Пиши @kipo17 щоб подивився що не так")
+        print("No responce image from AI server")
+        return
+
+    image_base64 = image_list_base64[0]
+    raw_image = base64.b64decode(image_base64)
+
+    if is_image_completely_black(raw_image):
+        print("NSFW content generated")
+        bot.send_message(chat_id, text=nsfw_content)
+        return
+
+    current_datetime = datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+    iname = str(chat_id) + ":" + current_datetime + ".jpg"
+    image_path = save_image(iname, raw_image, all_images_folder_path)
+
+    if image_path is None:
+        bot.send_message(chat_id, text="Не вийшло зберегти")
+        print("Couldn't save image")
+        return
+
+    # Отправляем изображение и кнопку пользователю
+    responce_msg_id = None
+    with open(image_path, "rb") as file:
+        message = bot.send_photo(chat_id, photo=file, reply_markup=make_responce_image_keyboard(image_path))
+        responce_msg_id = message.message_id
+
+    result = Result(
+        chat_id=chat_id,
+        response_message_id=responce_msg_id,
+        date=current_datetime,
+        is_saved=False,
+        is_removed=False,
+        result_base64=image_base64,
+        prompt_id=prompt_entity.id
+    )
+
+    repository.save_entity(result)
+    print("Saved result")
 
 
 def prepare_prompt(user_input, chat_id):
@@ -151,8 +166,8 @@ def prepare_prompt(user_input, chat_id):
     text = fetch_base_prompt() + translated
     return text
 
-
-def create_inline_keyboard(image_path):
+##### KEYBOARDS ####
+def make_responce_image_keyboard(image_path):
     keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
     approve_button = telebot.types.InlineKeyboardButton(text="🔥", callback_data=image_path)
     cancel_button = telebot.types.InlineKeyboardButton(text="❌", callback_data="cancel")
@@ -161,28 +176,34 @@ def create_inline_keyboard(image_path):
     keyboard.add(retry_button)
     return keyboard
 
+def make_retry_image_keyboard():
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    retry_button = telebot.types.InlineKeyboardButton(text="Інший варіант", callback_data="retry")
+    keyboard.add(retry_button)
+    return keyboard
+
 def retry_drawing(chat_id, message_id):
-    user = repository.get_user_by_chat_id(chat_id)
-    if user is None:
-        print("Can't find user with id: ", chat_id)
-        bot.send_message(chat_id, "Щось пішло не так. Повідом @Kipo17")
+    previous_result = repository.get_result_by_chat_id_and_message_id(chat_id, message_id)
+    if previous_result is None:
+        print(f"Can't find prevoius result with id: {chat_id} and message id: {message_id}")
+        bot.send_message(chat_id, "Щось пішло не так. Повідом @HalavicH")
         return
     
-    prompt = repository.get_prompt_by_message_id(chat_id, message_id)
-    if prompt is None:
-        print(f"Can't find prompt for user: {chat_id} for message_id: {message_id}")
-        bot.send_message(chat_id, "Щось пішло не так. Повідом @Kipo17")
+    prompt_entity = previous_result.prompt
+    if prompt_entity is None:
+        print(f"Can't get prompt for user: {chat_id} for message_id: {message_id}")
+        bot.send_message(chat_id, "Щось пішло не так. Повідом @HalavicH")
         return
 
-    print("Retrying generation for: " + prompt.final_prompt)
-    bot.send_message(chat_id, "Малюю інший варіант для запиту:", prompt.original_prompt)
+    print("Retrying generation for: " + prompt_entity.final_prompt)
+    bot.send_message(chat_id, f"Малюю інший варіант для запиту: `{prompt_entity.original_prompt}`", parse_mode='MarkdownV2')
     # save_new_prompt_for_user(message, prepared_prompt)
 
     try:
-        response = generate_pone(prompt.final_prompt, chat_id)
+        response = generate_pone(prompt_entity.final_prompt, chat_id)
     except Exception as err:
         print("Can't connect to the AI engine ", err)
         bot.send_message(chat_id, "Упс. Хтось вкрав відеокарту. Не можу малювати в даний час. Якщо це повторюється часто - пиши @Kipo17")
         return
 
-    handle_response(chat_id, response)
+    handle_response(chat_id, response, prompt_entity)

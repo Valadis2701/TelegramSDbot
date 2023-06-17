@@ -1,8 +1,6 @@
 import os
 import shutil
-
-prompt_file_path = "./properties/prompt.txt"
-negative_prompt_file_path = "./properties/negativeprompt.txt"
+from bot_config import *
 
 def save_image(image_name, image_data, folder_path):
     if not os.path.exists(folder_path):
@@ -24,7 +22,8 @@ def copy_image(image_path, destination_folder):
         destination_path = os.path.join(destination_folder, image_filename)
         shutil.copyfile(image_path, destination_path)
         return destination_path
-    except OSError:
+    except OSError as err:
+        print(err)
         return None
 
 

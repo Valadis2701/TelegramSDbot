@@ -1,10 +1,13 @@
 import telebot
+import os
 
 # Config
 bot_token = "1247537040:AAFa0NAtFcTXEa4PGQerTbQo7QfQ2bQw3G0"
 api_endpoint = "http://217.77.221.234:7860/sdapi/v1/txt2img"
-pictures_folder_path = "./pictures"
+saved_pictures_folder_path = "./pictures"
 all_images_folder_path = "./all"
+prompt_file_path = "./bot/properties/prompt.txt"
+negative_prompt_file_path = "./bot/properties/negativeprompt.txt"
 
 # Message text
 start_msg = "Привіт, я генєрю панєй. \n Ти мені промпти з тегами, я тобі всраті арти! Зверни увагу, що теги потрiбно писати українською або англiйською. Iнакше результат буде жахливим"
@@ -21,3 +24,8 @@ ADMIN_LIST = [
 # Setup
 print("Bot setup")
 bot = telebot.TeleBot(bot_token)
+
+
+print("########## CONFIG ############")
+print("Saved pictures path: " + os.path.abspath(saved_pictures_folder_path))
+print("All pictures path: " + os.path.abspath(all_images_folder_path))

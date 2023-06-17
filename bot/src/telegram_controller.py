@@ -1,3 +1,4 @@
+import traceback
 import telegram_service
 from bot_config import bot
 
@@ -9,6 +10,7 @@ def try_handle(callback, message):
         print("############ ERROR ###########")
         print("Unexpected error happened!")
         print(err)
+        traceback.print_exc()
         print("##############################")
         try:
             bot.send_message(message.from_user.id, "Невідома помилка. Зконтактуй @Kipo17")

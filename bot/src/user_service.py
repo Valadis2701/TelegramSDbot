@@ -28,8 +28,9 @@ def init_user_context(from_user):
     try:
         db_session.add(new_user)
         db_session.commit()
-    except Exception:
-        print("Can't init user")
+    except Exception as err:
+        print("Can't add new user: ", err)
+        db_session.rollback()
 
 
 def get_registered_user_message():
@@ -61,3 +62,5 @@ def save_new_prompt_for_user(message, prepared_prompt):
     except Exception as err:
         print("Can't add new prompt: ", err)
         db_session.rollback()
+
+    return db_session.query(Prompt).filter_by(chat_id=message.from_user.id).filter_by(message_id=message.message_id).first()

@@ -71,5 +71,38 @@ def get_all_users():
 def get_user_by_chat_id(chat_id):
     return db_session.query(User).filter_by(chat_id=chat_id).first()
 
+def get_result_by_chat_id_and_message_id(chat_id, message_id):
+    return db_session.query(Result).filter_by(chat_id=chat_id).filter_by(response_message_id=message_id).first()
+
 def get_prompt_by_message_id(chat_id, message_id):
     return db_session.query(Prompt).filter_by(chat_id=chat_id, message_id=message_id).first()
+
+def mark_result_as_deleted(chat_id, message_id):
+    try:
+        result = get_result_by_chat_id_and_message_id(chat_id, message_id)
+        result.is_removed = True
+        # db_session update entity
+        db_session.commit()
+    except Exception as err:
+        print(f"Can't update entity. Err", err)
+        db_session.rollback()
+    
+
+def mark_result_as_saved(chat_id, message_id):
+    try:
+        result = get_result_by_chat_id_and_message_id(chat_id, message_id)
+        result.is_saved = True
+        # db_session update entity
+        db_session.commit()
+    except Exception as err:
+        print(f"Can't update entity. Err", err)
+        db_session.rollback()
+    
+
+def save_entity(entity):
+    try:
+        db_session.add(entity)
+        db_session.commit()
+    except Exception as err:
+        print(f"Can't save entity: {entity}. Err", err)
+        db_session.rollback()
