@@ -16,6 +16,8 @@ class ImageEventHandler(FileSystemEventHandler):
         self.display_duration = display_duration
         self.pics = []
         self.current_index = 0
+        self.new_img_present = False
+        self.new_file_pth = None
 
     def start_slideshow(self):
         self.pics = self.get_image_files()
@@ -23,6 +25,14 @@ class ImageEventHandler(FileSystemEventHandler):
 
         # Display the images as a slideshow
         while True:
+            if self.new_img_present is True:
+                print("Displaying new image")
+                self.display_image(self.new_file_pth)
+                self.new_img_present = False
+            else:
+                print("No new image")
+            
+
             self.display_image(self.pics[self.current_index])
             self.current_index = (self.current_index + 1) % len(self.pics)
 
@@ -37,8 +47,10 @@ class ImageEventHandler(FileSystemEventHandler):
         return pics
 
     def display_image(self, pic):
+        abs_pic_path = os.path.abspath(pic)
+        print(abs_pic_path)
         # image = Image.open(pic)
-        image = cv2.imread(pic)
+        image = cv2.imread(abs_pic_path)
         # image.show()
         cv2.imshow("Fullscreen Image", image)
         k = cv2.waitKey(self.display_duration*1000)
@@ -56,7 +68,10 @@ class ImageEventHandler(FileSystemEventHandler):
             # Check if the new file is not already in the list
             if new_file not in self.pics:
                 self.pics.append(new_file)
-                self.display_image(new_file)
+                print("New file added", new_file)
+                time.sleep(500)
+                self.new_file_pth = new_file
+                self.new_img_present = True
 
 
 def main():
