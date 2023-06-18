@@ -15,7 +15,10 @@ start_msg = "Привіт, я генєрю панєй. \n Ти мені пром
 help_msg = "[Example](https://purplesmart.ai/item/e78ab628-1242-40d7-be0a-e7b2113cd166#:~:text=Prompt-,safe,%20%28%28derpibooru_p_95%29%29,%20fluffy%20filly%20princess%20luna,%20%5Bcute,%20smiling,%20beautiful%20eyes%5D,%20artstation,%20detailed%20light,%20soft,%20glowing%20royal%20garden,-Negative%20prompt)"
 in_progress_msg = "Малюю. Це може зайняти декiлька хвилин якщо багато людей використовує бота одночас"
 no_perrmission_msg = "You don't have permission to do it"
-nsfw_content = "Пробачте, але президент заборонив клопати до перемоги"
+nsfw_content = "Виявлено хтиву картинку! \nПробачте, але президент заборонив клопати до перемоги \nЯкщо це помилка, спробуйте ще раз або додайте тег safe/безпечний"
+
+# Media files
+nsfw_image = "https://i.kym-cdn.com/photos/images/original/000/221/809/35kamk.jpg"
 
 # Admin list
 ADMIN_LIST = [

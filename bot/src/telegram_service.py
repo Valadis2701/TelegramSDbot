@@ -128,9 +128,9 @@ def handle_response(chat_id, response, prompt_entity):
 
     if is_image_completely_black(raw_image):
         print("NSFW content generated")
-        bot.send_message(chat_id, text=nsfw_content)
+        bot.send_photo(chat_id, nsfw_image, nsfw_content)
         return
-
+    
     current_datetime = datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
     iname = str(chat_id) + ":" + current_datetime + ".jpg"
     image_path = save_image(iname, raw_image, all_images_folder_path)
