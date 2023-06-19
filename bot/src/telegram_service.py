@@ -132,7 +132,7 @@ def handle_response(chat_id, response, prompt_entity):
         return
     
     current_datetime = datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-    iname = str(chat_id) + ":" + current_datetime + ".jpg"
+    iname = str(chat_id) + "_" + current_datetime + ".jpg"
     image_path = save_image(iname, raw_image, all_images_folder_path)
 
     if image_path is None:

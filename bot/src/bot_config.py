@@ -5,8 +5,8 @@ import os
 # Config
 bot_token = sys.argv[1]
 api_endpoint = sys.argv[2] + "/sdapi/v1/txt2img"
-saved_pictures_folder_path = "./pictures"
-all_images_folder_path = "./all"
+saved_pictures_folder_path = "./bot/pictures"
+all_images_folder_path = "./bot/all"
 prompt_file_path = "./bot/properties/prompt.txt"
 negative_prompt_file_path = "./bot/properties/negativeprompt.txt"
 
